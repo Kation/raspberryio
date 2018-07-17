@@ -681,7 +681,7 @@
 
             var i = 0;
             var buf = new List<byte>();
-            while (i < 16)
+            while (i < 16 && i < writeData.Length)
             {
                 buf.Add(writeData[i]);
                 i++;

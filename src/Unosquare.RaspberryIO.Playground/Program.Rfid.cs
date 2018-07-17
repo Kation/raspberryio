@@ -2,82 +2,116 @@
 {
     using Peripherals;
     using Swan;
+    using System;
     using System.Linq;
 
     public partial class Program
     {
+        public static readonly byte[] CustomKey = new byte[] { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
+
         private static void TestRfidController()
         {
             "Testing RFID".Info();
-            var device = new RFIDControllerMfrc522(Pi.Spi.Channel0, 500000, Pi.Gpio[22]);
-
-            while (true)
+            try
             {
-                // If a card is found
-                if (device.DetectCard() == RFIDControllerMfrc522.Status.AllOk)
+                var device = new RFIDControllerMfrc522(Pi.Spi.Channel1, 500000, Pi.Gpio[18]);
+
+                while (true)
                 {
-                    "Card detected".Info();
-
-                    // Get the UID of the card
-                    var uidResponse = device.ReadCardUniqueId();
-
-                    // If we have the UID, continue
-                    if (uidResponse.Status == RFIDControllerMfrc522.Status.AllOk)
+                    // If a card is found
+                    if (device.DetectCard() == RFIDControllerMfrc522.Status.AllOk)
                     {
-                        var cardUid = uidResponse.Data;
+                        "Card detected".Info();
 
-                        // Print UID
-                        $"Card UID: {cardUid[0]},{cardUid[1]},{cardUid[2]},{cardUid[3]}".Info();
+                        // Get the UID of the card
+                        var uidResponse = device.ReadCardUniqueId();
 
-                        // Select the scanned tag
-                        device.SelectCardUniqueId(cardUid);
-
-                        // Writing data to sector 1 blocks
-                        // Authenticate sector
-                        if (device.AuthenticateCard1A(RFIDControllerMfrc522.DefaultAuthKey, cardUid, 7) == RFIDControllerMfrc522.Status.AllOk)
+                        // If we have the UID, continue
+                        if (uidResponse.Status == RFIDControllerMfrc522.Status.AllOk)
                         {
-                            var data = new byte[16 * 3];
-                            for (var x = 0; x < data.Length; x++)
-                            {
-                                data[x] = (byte)(x + 65);
-                            }
+                            var cardUid = uidResponse.Data;
 
-                            for(int b = 0; b < 3; b++)
-                            {
-                                device.CardWriteData((byte)(4 + b), data.Skip(b * 16).Take(16).ToArray());
-                            }
-                        }
+                            // Print UID
+                            $"Card UID: {cardUid[0]},{cardUid[1]},{cardUid[2]},{cardUid[3]}".Info();
 
-                        // Reading data
-                        var continueReading = true;
-                        for (int s = 0; s < 16 && continueReading; s++)
-                        {
+                            // Select the scanned tag
+                            device.SelectCardUniqueId(cardUid);
+
+                            ////// Change KeyA
+                            //if (device.AuthenticateCard1A(RFIDControllerMfrc522.DefaultAuthKey, cardUid, 7) == RFIDControllerMfrc522.Status.AllOk)
+                            //{
+                            //    var data = new byte[] { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0xFF, 0x07, 0x80, 0x69, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+                            //    var changeAuthResult = device.CardWriteData(7, data);
+                            //    $"Change KeyA Result: {changeAuthResult}".Info();
+                            //}
+                            //else
+                            //{
+                            //    "Error while changing KeyA".Error();
+                            //}
+
+                            // Writing data to sector 1 blocks
                             // Authenticate sector
-                            if (device.AuthenticateCard1A(RFIDControllerMfrc522.DefaultAuthKey, cardUid, (byte)((4 * s) + 3)) == RFIDControllerMfrc522.Status.AllOk)
+                            if (device.AuthenticateCard1A(RFIDControllerMfrc522.DefaultAuthKey, cardUid, 7) == RFIDControllerMfrc522.Status.AllOk)
                             {
-                                $"Sector {s}".Info();
-                                for (int b = 0; b < 3 && continueReading; b++)
+                                var data = new byte[16 * 3];
+                                for (var x = 0; x < data.Length; x++)
                                 {
-                                    var data = device.CardReadData((byte)((4 * s) + b));
-                                    if (data.Status != RFIDControllerMfrc522.Status.AllOk)
-                                    {
-                                        continueReading = false;
-                                        break;
-                                    }
+                                    data[x] = (byte)(112 - x);
+                                }
 
-                                    $"  Block {b} ({data.Data.Length} bytes): {string.Join(" ", data.Data.Select(x => x.ToString("X2")))}".Info();
+                                for (int b = 0; b < 3; b++)
+                                {
+                                    device.CardWriteData((byte)(4 + b), data.Skip(b * 16).Take(16).ToArray());
                                 }
                             }
                             else
                             {
-                                "Authentication error".Error();
-                                break;
+                                "Authentication error for write".Error();
                             }
-                        }
 
-                        device.ClearCardSelection();
+                            // Reading data
+                            var continueReading = true;
+                            for (int s = 0; s < 16 && continueReading; s++)
+                            {
+                                // Authenticate sector
+                                var authResult = device.AuthenticateCard1A(RFIDControllerMfrc522.DefaultAuthKey, cardUid, (byte)((4 * s) + 3));
+
+                                //if (authResult != RFIDControllerMfrc522.Status.AllOk)
+                                //{
+                                //    "Authenticating with custom key...".Info();
+                                //    authResult = device.AuthenticateCard1A(CustomKey, cardUid, (byte)((4 * s) + 3));
+                                //}
+
+                                if (authResult == RFIDControllerMfrc522.Status.AllOk)
+                                {
+                                    $"Sector {s}".Info();
+                                    for (int b = 0; b < 4 && continueReading; b++)
+                                    {
+                                        var data = device.CardReadData((byte)((4 * s) + b));
+                                        if (data.Status != RFIDControllerMfrc522.Status.AllOk)
+                                        {
+                                            continueReading = false;
+                                            break;
+                                        }
+
+                                        $"  Block {b} ({data.Data.Length} bytes): {string.Join(" ", data.Data.Select(x => x.ToString("X2")))}".Info();
+                                    }
+                                }
+                                else
+                                {
+                                    "Authentication error".Error();
+                                    break;
+                                }
+                            }
+
+                            device.ClearCardSelection();
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                ex.Log(nameof(TestRfidController));
             }
         }
     }

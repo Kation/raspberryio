@@ -33,7 +33,7 @@
                 // TestSystemInfo();
 
                 // TestCaptureImage();
-                TestCaptureVideo();
+                //TestCaptureVideo();
 
                 // TestLedStripGraphics();
                 // TestLedStrip();
